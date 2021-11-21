@@ -6,6 +6,8 @@ import numpy as np
 from fractions import Fraction
 
 DEBUG = False
+DEBUG_MIP = False
+DEBUG_SIMPLEX = False
 M = Fraction(1e9)
 tolerance = 1e-6
 ZERO = Fraction(0)
@@ -50,7 +52,7 @@ def simplex(constraints, objective):
             num_slack += 1
             num_artificial += 1
     # construct the simplex
-    if DEBUG:
+    if DEBUG or DEBUG_SIMPLEX:
         print(f'{num_slack} slacks {num_artificial} artificials')
     total_vars = num_vars + num_artificial + num_slack + 1  # +1: objective
     augmented = np.ndarray((num_constraints + 1, total_vars + 1), dtype=Fraction)  # objective and RHS
@@ -85,16 +87,17 @@ def simplex(constraints, objective):
     # penalty for artificial vars
     for i in range(num_artificial):
         augmented[-1][-i - 3] = M  # big M
-    if DEBUG:
+    if DEBUG or DEBUG_SIMPLEX:
         print(augmented)
     # eliminate M from the objective row
-    for i in range(num_artificial):
-        augmented[-1] -= M * augmented[-2 - i]
+    for i in range(num_constraints):
+        if sum(augmented[i][num_vars + num_slack:num_vars + num_slack + num_artificial]) > 0:
+            augmented[-1] -= M * augmented[i]
     basics = [0 for _ in constraints]
     basics.append(-1)  # the objective
     # choose initial basic variables (slack and artificial ones)
     basics[:-1] = range(num_vars, num_vars + num_constraints)
-    if DEBUG:
+    if DEBUG or DEBUG_SIMPLEX:
         print(augmented)
         print(basics)
     num_iter = 0
@@ -115,7 +118,7 @@ def simplex(constraints, objective):
             if augmented[-1, coef] < max_abs:
                 entering_idx = coef
                 max_abs = augmented[-1, coef]
-        if DEBUG:
+        if DEBUG or DEBUG_SIMPLEX:
             print(f"iteration {num_iter}: entering basic variable is x{entering_idx}")
         # choose leaving basic variable: row with the least RHS/leaving, s.t. leaving>0
         with np.errstate(divide='ignore', invalid='ignore'):
@@ -132,7 +135,7 @@ def simplex(constraints, objective):
                 leaving_idx = idx
                 min_coef = coef
             idx += 1
-        if DEBUG:
+        if DEBUG or DEBUG_SIMPLEX:
             print(f"iteration {num_iter}: leaving basic variable is x{basics[leaving_idx]} (row {leaving_idx})")
         # change pivot to 1
         augmented[leaving_idx] /= augmented[leaving_idx, entering_idx]
@@ -142,7 +145,7 @@ def simplex(constraints, objective):
                 continue
             augmented[j] -= augmented[leaving_idx] * augmented[j, entering_idx]
         basics[leaving_idx] = entering_idx
-        if DEBUG:
+        if DEBUG or DEBUG_SIMPLEX:
             print(augmented)
             print(basics)
     # keep the basic variables (others are 0)
@@ -152,7 +155,7 @@ def simplex(constraints, objective):
         result = np.concatenate((result, [augmented[:, i]]))
     result = np.asarray(result.T).tolist()
     rhs = augmented[:, total_vars]
-    if DEBUG:
+    if DEBUG or DEBUG_SIMPLEX:
         print(result, rhs)
     # rearrange rows for the solution
     # x = np.linalg.solve(result, rhs)
@@ -179,7 +182,7 @@ def simplex(constraints, objective):
     for i in constraints:
         rhs = sum(x * y for x, y in zip(i[:-2], sol[:-1]))
         if not((abs(rhs - i[-1]) <= tolerance and i[-2] == 0) or (rhs <= i[-1] + tolerance and i[-2] == -1) or (rhs >= i[-1] - tolerance and i[-2] == 1)):
-            if DEBUG:
+            if DEBUG or DEBUG_SIMPLEX:
                 print(f'result incorrect, constraint: {i}; sol: {sol}; rhs: {rhs}; value: {i[-1]}')
             return None
     return sol
@@ -208,7 +211,7 @@ def mip(constraints, additional_constraints, objective):
         return None
     while True:
         # just bfs it (tm)
-        if DEBUG:
+        if DEBUG or DEBUG_MIP:
             print(f'considering {sol}')
         violation = -1
         for i in range(num_vars):
@@ -262,6 +265,8 @@ def mip(constraints, additional_constraints, objective):
         s = None
         while s is None:
             # this loop fanthoms infeasible ones
+            if DEBUG or DEBUG_MIP:
+                print(f'bfs={bfs}')
             if len(bfs) > 0:
                 curr_bounds = bfs.pop(0)
                 constraints = og_constraints.copy()
@@ -271,12 +276,14 @@ def mip(constraints, additional_constraints, objective):
                 else:
                     for i in curr_bounds:
                         constraints.append(list(i))
-                    if DEBUG:
+                    if DEBUG or DEBUG_MIP:
                         print(f'sol: {sol}')
                         print('extra constraints')
                         for j in curr_bounds:
                             print(f'  {j.index(1)} {j[-2]} {j[-1]}')
                     s = simplex(constraints, objective)
+                    if DEBUG or DEBUG_MIP:
+                        print(s)
                     if s is not None:
                         sol = s
                         cached_sols[curr_bounds] = s
