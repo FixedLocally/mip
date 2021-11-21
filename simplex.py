@@ -69,19 +69,19 @@ def simplex(constraints, objective):
             augmented[idx_constraint] *= -1
         if side == -1:
             idx_slack += 1
-            augmented[idx_constraint][num_vars + idx_slack] = 1
+            augmented[idx_constraint][num_vars + idx_slack] = ONE
         elif side == 0:
             idx_artificial += 1
-            augmented[idx_constraint][num_vars + num_slack + idx_artificial] = 1
+            augmented[idx_constraint][num_vars + num_slack + idx_artificial] = ONE
         elif side == 1:
             idx_slack += 1
             idx_artificial += 1
-            augmented[idx_constraint][num_vars + idx_slack] = -1
-            augmented[idx_constraint][num_vars + num_slack + idx_artificial] = 1
+            augmented[idx_constraint][num_vars + idx_slack] = -ONE
+            augmented[idx_constraint][num_vars + num_slack + idx_artificial] = ONE
     # objective
     augmented[-1][0:num_vars] = objective[0:num_vars]
     augmented[-1] *= -1
-    augmented[-1][total_vars - 1] = 1
+    augmented[-1][total_vars - 1] = ONE
     # penalty for artificial vars
     for i in range(num_artificial):
         augmented[-1][-i - 3] = M  # big M
@@ -203,6 +203,9 @@ def mip(constraints, additional_constraints, objective):
     cached_sols = {(): sol}
     curr_bounds = ()
     bfs = []
+    if sol is None:
+        # LP relaxation has no solution
+        return None
     while True:
         # just bfs it (tm)
         if DEBUG:
