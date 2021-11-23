@@ -3,7 +3,7 @@ Reference: http://www.pstcc.edu/facstaff/jwlamb/Math1630/6.4.pdf
 Requires Python 3.10
 """
 import numpy as np
-from fractions import Fraction
+from cfractions import Fraction
 
 DEBUG = False
 DEBUG_MIP = False
